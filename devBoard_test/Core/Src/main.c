@@ -18,12 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "adc.h"
-#include "dma.h"
-#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-
+#include "string.h"
+#include "stdio.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -47,12 +45,13 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-uint8_t flag = 0;
-uint16_t adcBuf[1024]={0};
+int test_num = 0;
+uint8_t dir_flag = 2;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -69,6 +68,7 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+	char UART_BUF[12]="00";
 
   /* USER CODE END 1 */
 
@@ -90,27 +90,26 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_ADC1_Init();
-  MX_TIM1_Init();
+
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_Base_Start(&htim1);
-  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adcBuf, sizeof(adcBuf));
+  //HAL_UART_Transmit(&huart1,(uint8_t *)"UART1 START!\n",13,0xff);
+  HAL_UART_Transmit(&huart2,(uint8_t *)"UART2 START!\n",13,0xff);
+
+  //HAL_UART_Receive_IT(&huart1, (uint8_t *)&RxBuffer1, 1);
+  //HAL_UART_Receive_IT(&huart2, (uint8_t *)&RxBuffer2, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if (flag == 1) {
-		flag = 0;
-		//perform FFT transform
-		HAL_TIM_Base_Start(&htim1);
-		HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adcBuf, sizeof(adcBuf));
-	}
-	  /* USER CODE END WHILE */
+    /* USER CODE END WHILE */
+	  if(dir_flag != 2) {
+	 		dir_flag = 2;
+	 		sprintf(UART_BUF, "%d", test_num);
+	 	    HAL_UART_Transmit(&huart2, (uint8_t*)UART_BUF, 12, 0xff);
+	 	  }
 
     /* USER CODE BEGIN 3 */
   }
@@ -125,13 +124,14 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};/////////important
 
   /** Configure the main internal regulator output voltage
   */
-  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
-  {
-    Error_Handler();
-  }
+//  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+//  {
+//    Error_Handler();
+//  }
 
   /** Configure LSE Drive Capability
   */
@@ -149,7 +149,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_MSI;
   RCC_OscInitStruct.PLL.PLLM = 1;
-  RCC_OscInitStruct.PLL.PLLN = 16;
+  RCC_OscInitStruct.PLL.PLLN = 40;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
@@ -167,18 +167,61 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
   }
-
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2;
+  PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+   /** Configure the main internal regulator output voltage
+   */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /** Enable MSI Auto calibration
   */
   HAL_RCCEx_EnableMSIPLLMode();
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  /* Prevent unused argument(s) compilation warning */
+  UNUSED(GPIO_Pin);
+  static uint8_t count = 0;
+  static uint8_t b_flag;
+  GPIO_PinState a_value = HAL_GPIO_ReadPin(EC11_A_GPIO_Port, EC11_A_Pin);
+  GPIO_PinState b_value = HAL_GPIO_ReadPin(EC11_B_GPIO_Port, EC11_B_Pin);
 
+  if(GPIO_Pin == EC11_A_Pin) {
+    if(a_value == GPIO_PIN_RESET && count == 0) {
+		b_flag = 0;
+		if(b_value) b_flag = 1;
+		count = 1;
+	}
+
+	if(a_value == GPIO_PIN_SET && count == 1) {
+		if(b_value == GPIO_PIN_RESET && b_flag ==1){
+			test_num--;
+			dir_flag = 1;
+		}
+		if(b_value && b_flag == 0) {
+			test_num++;
+			dir_flag = 0;
+		}
+		count = 0;
+	}
+
+  }
+
+
+}
 /* USER CODE END 4 */
 
 /**
