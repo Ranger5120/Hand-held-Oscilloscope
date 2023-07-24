@@ -1,0 +1,3 @@
+# About this DSP Process
+Generally in main.c ; Using cmsis-dsp library.An ADC will collect 1024 bits data into an buffer by DMA in a sampling rate of 100kHz. As all the bits are transferred, an NVIC would be triggered, and restart the timmer and adc. Also, a variable called flag would be set to 1, which is used to trigger the function set inside the infinite loop in main function.  
+After finishing the transfer, fft would be applied to the array, and the frequency spectrum would be found.
